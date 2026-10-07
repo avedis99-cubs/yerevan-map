@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Yerevan Commute Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: full-bleed Yandex map with a left control rail (bottom sheet on phones). */
+:root{
+  --bg:#f5f6f3; --panel:#ffffff; --ink:#1d2622; --muted:#5d6a63; --line:#dfe3dd; --chip:#eef1ec;
+  --accent:#1b6b47; --warn:#a2461b; --focus:#2f62d8;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#141a17; --panel:#1b2420; --ink:#e7ece8; --muted:#9aa8a0; --line:#2d3934; --chip:#24302b;
+  --accent:#5cc597; --warn:#f0a070; --focus:#8fb1ff; color-scheme:dark}}
+[hidden]{display:none!important}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.45 var(--sans)}
+#app{display:grid;grid-template-columns:360px 1fr;height:100%}
+#map{min-width:0;height:100%}
+aside{background:var(--panel);border-right:1px solid var(--line);overflow:auto;padding:18px 18px 28px;display:flex;flex-direction:column;gap:18px}
+h1{font-size:19px;line-height:1.2;margin:0;letter-spacing:-.01em;text-wrap:balance}
+.sub{color:var(--muted);margin:4px 0 0;font-size:13px}
+section{display:flex;flex-direction:column;gap:8px}
+h2{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0;display:flex;justify-content:space-between;align-items:center}
+h2 .links{display:flex;gap:10px;white-space:nowrap;text-transform:none;letter-spacing:0;font-weight:500}
+button.link{background:none;border:0;padding:0;color:var(--accent);font:inherit;cursor:pointer}
+button.link:focus-visible,input:focus-visible,label.row:focus-within{outline:2px solid var(--focus);outline-offset:2px;border-radius:6px}
+.modes{display:flex;gap:8px}
+.mode{flex:1;display:flex;align-items:center;gap:8px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;cursor:pointer;font-weight:600}
+.mode input{accent-color:var(--accent);width:16px;height:16px}
+label.row{display:grid;grid-template-columns:18px 30px 1fr;gap:10px;align-items:start;padding:8px 6px;border-radius:6px;cursor:pointer}
+label.row:hover{background:var(--chip)}
+label.row input{margin:2px 0 0;accent-color:var(--accent);width:16px;height:16px}
+.sw{height:18px;border-radius:9px;margin-top:1px;position:relative}
+.sw.rank{display:grid;place-items:center;color:#fff;font:600 12px var(--mono)}
+.sw.bus{display:grid;place-items:center;color:#fff;font:600 10px var(--mono);border-radius:4px}
+.t1{font-weight:600}
+.t2{color:var(--muted);font-size:12.5px}
+.t2 b{color:var(--ink);font-weight:500;font-family:var(--mono);font-size:12px}
+.dim{opacity:.45}
+.status{font-size:12px;font-family:var(--mono);display:block;margin-top:2px}
+.status.err{color:var(--warn)}
+.note{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:6px}
+.note p{margin:0}
+a{color:var(--accent)}
+.homeopts{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.homeopts .mode{flex:0 0 auto}
+.homeopts select{flex:1 1 180px;min-width:0}
+.homeopts select{font:13px var(--sans);padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink)}
+.homes{display:flex;flex-direction:column;gap:6px}
+.home{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:8px}
+.home .t2{grid-column:1}
+details.busgrp{display:flex;flex-direction:column;gap:6px}
+details.busgrp>summary{cursor:pointer;font-weight:600;padding:6px 2px;list-style-position:inside}
+details.busgrp .homes{margin-top:6px}
+.t2 strong{font-family:var(--sans);color:var(--ink);font-weight:600}
+.home .go{grid-row:1/3;grid-column:2;display:flex;gap:6px}
+.home .go a{font-weight:600;font-size:12.5px;white-space:nowrap;text-decoration:none;padding:5px 9px;border:1px solid var(--line);border-radius:6px;color:var(--accent)}
+.home .go a:hover{background:var(--chip)}
+.home .go a:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+#keygate{position:fixed;inset:0;background:var(--bg);display:grid;place-items:center;padding:16px;z-index:10}
+#keygate form{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:22px;max-width:440px;width:100%;display:flex;flex-direction:column;gap:12px}
+#keygate h1{font-size:21px}
+#keygate ol{margin:0;padding-left:20px;color:var(--muted);font-size:13px;display:flex;flex-direction:column;gap:4px}
+#keygate input{font:13px var(--mono);padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+#keygate button[type=submit]{font:600 14px var(--sans);padding:10px;border:0;border-radius:8px;background:var(--accent);color:var(--panel);cursor:pointer}
+#keymsg{font-size:13px;color:var(--warn);min-height:1em;margin:0}
+#sheetbtn{display:none}
+/* balloons */
+.bl{font:13px/1.4 var(--sans);color:#1d2622;max-width:360px}
+.bl h3{margin:0 0 2px;font-size:15px}
+.bl .n{color:#5d6a63;font-size:12px;margin:0 0 8px}
+.bl table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+.bl th{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:#5d6a63;text-align:left;font-weight:600;padding:3px 6px 3px 0;border-bottom:1px solid #dfe3dd}
+.bl td{padding:4px 6px 4px 0;border-bottom:1px solid #eef1ec;font-family:var(--mono);font-size:12px;white-space:nowrap}
+.bl td.r{font-family:var(--sans)}
+.bl .dot{display:inline-block;width:16px;height:16px;border-radius:8px;color:#fff;font:600 10px/16px var(--mono);text-align:center}
+.bl .ok{font-weight:600;color:#1b6b47}
+.bl .over{color:#a2461b}
+.bl p{margin:6px 0 0}
+@media (max-width:760px){
+  #app{grid-template-columns:1fr;grid-template-rows:1fr auto}
+  aside{border-right:0;border-top:1px solid var(--line);max-height:46vh;padding-bottom:calc(20px + env(safe-area-inset-bottom,0px))}
+  aside.collapsed{max-height:56px;overflow:hidden}
+  #sheetbtn{display:block;position:absolute;right:16px;top:12px}
+  aside{position:relative;order:2}
+  #map{order:1}
+  aside h1{padding-right:96px}
+}
+@media (prefers-reduced-motion:no-preference){label.row{transition:background .12s}}
+</style>
+</head>
+<body>
+<div id="keygate">
+  <form id="keyform">
+    <h1>Yerevan Commute Map</h1>
+    <p class="sub">This map runs on Yandex Maps, which needs your free Yandex Maps API key. The key is saved only in this browser.</p>
+    <ol>
+      <li>Open <a href="https://developer.tech.yandex.ru/services/" target="_blank" rel="noopener">developer.tech.yandex.ru</a> and sign in with your Yandex account.</li>
+      <li>Choose <b>Connect APIs</b>, then <b>JavaScript API and HTTP Geocoder</b>, and fill in the short form.</li>
+      <li>Copy the key it shows. A new key can take up to 15 minutes to start working.</li>
+    </ol>
+    <label for="apikey" class="sub">Yandex Maps API key</label>
+    <input id="apikey" autocomplete="off" spellcheck="false" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" required>
+    <p id="keymsg"></p>
+    <button type="submit">Load map</button>
+  </form>
+</div>
+
+<div id="app">
+  <aside id="panel">
+    <div>
+      <h1>Yerevan 30-minute commutes</h1>
+      <p class="sub">Daily, year-round trains from Yerevan Central and big-bus routes from four bus stations. Click a station or route for times; zoom in to see station names.</p>
+      <button class="link" id="sheetbtn" type="button">Hide panel</button>
+    </div>
+
+    <section>
+      <h2>Show</h2>
+      <div class="modes">
+        <label class="mode"><input type="checkbox" id="showTrains" checked> Trains</label>
+        <label class="mode"><input type="checkbox" id="showBuses" checked> Buses</label>
+      </div>
+    </section>
+
+    <section id="trainSec">
+      <h2>Trains by cancellation risk <span class="links"><button class="link" type="button" data-ranks="1">Lowest only</button><button class="link" type="button" data-ranks="1,2,3,4,5">All</button><button class="link" type="button" data-ranks="">None</button></span></h2>
+      <div id="rankList"></div>
+      <p class="t2">1 = lowest risk, 5 = highest. Where trains share track, their lines run side by side.</p>
+    </section>
+
+    <section id="busSec">
+      <h2>Bus routes <span class="links"><button class="link" type="button" data-buses="203,261,284,451">All</button><button class="link" type="button" data-buses="">None</button></span></h2>
+      <div id="busList"></div>
+    </section>
+
+    <section id="homeSec">
+      <h2>Houses and land on list.am</h2>
+      <p class="t2"><strong>Houses:</strong> new developments, $50,000–$90,000. <strong>Land:</strong> plots of 300–400 m², $10,000–$50,000. Each link opens list.am's live listings map centred on that station, so it is always current.</p>
+      <div class="homeopts">
+        <label class="mode"><input type="checkbox" id="showCircles"> Walking circles</label>
+        <select id="radius" aria-label="Walking radius">
+          <option value="1000">1 km · about 13 min walk</option>
+          <option value="1500">1.5 km · about 20 min walk</option>
+          <option value="2000">2 km · about 27 min walk</option>
+          <option value="3000">3 km · about 40 min walk</option>
+        </select>
+      </div>
+      <div class="homes" id="homeList"></div>
+      <h2 style="margin-top:6px">Bus stops</h2>
+      <div class="homes" id="busHomeList"></div>
+    </section>
+
+    <div class="note">
+      <p><b>Train times</b> are South Caucasus Railway's official timetable. Track shapes come from the Natural Earth railway dataset, adjusted to pass through each station. They are simplified, so they can sit a few hundred metres off the real track between stations.</p>
+      <p><b>Bus paths</b> are drawn by Yandex along real roads through each route's main stops. Yandex plots them as car routes, so a bus may take a slightly different street. If Yandex can't plot a route, it shows dashed, and the line under the route says why.</p>
+      <p><button class="link" id="changeKey" type="button">Change API key</button></p>
+    </div>
+  </aside>
+  <div id="map"></div>
+</div>
+
+<script>
+const DATA = {"ranks": [{"rank": 1, "out": "684", "in": "687", "line": "Gyumri", "stock": "EP2D / EP2D", "outRoute": "Yerevan → Gyumri", "inRoute": "Gyumri → Yerevan", "outDep": "07:55", "inOrig": "Gyumri 11:55", "stations": ["Yerevan", "Noragavit", "Masis", "Sis", "Haykashen"], "path": [[40.155395, 44.508539], [40.157957, 44.507233], [40.154808, 44.494738], [40.152809, 44.486112], [40.152066, 44.482902], [40.149589, 44.473517], [40.147446, 44.467163], [40.146731, 44.465867], [40.14021, 44.462895], [40.1277, 44.465316], [40.114426, 44.464976], [40.113106, 44.464033], [40.106928, 44.445681], [40.10313, 44.424592], [40.089713, 44.417798], [40.078415, 44.416783], [40.070091, 44.415364], [40.065088, 44.41348], [40.063111, 44.411831], [40.062663, 44.410968], [40.061572, 44.407309], [40.061444, 44.398376], [40.063022, 44.390038], [40.06327, 44.389138], [40.06596, 44.378137], [40.067164, 44.371909], [40.066759, 44.362901], [40.064006, 44.354601], [40.064445, 44.345833], [40.065555, 44.328332], [40.068169, 44.308937]], "trips": [{"st": "Noragavit", "dir": "out", "train": "684", "route": "Yerevan → Gyumri", "dep": "07:55", "arr": "08:04", "mins": 9}, {"st": "Masis", "dir": "out", "train": "684", "route": "Yerevan → Gyumri", "dep": "07:55", "arr": "08:14", "mins": 19}, {"st": "Sis", "dir": "out", "train": "684", "route": "Yerevan → Gyumri", "dep": "07:55", "arr": "08:18", "mins": 23}, {"st": "Haykashen", "dir": "out", "train": "684", "route": "Yerevan → Gyumri", "dep": "07:55", "arr": "08:24", "mins": 29}, {"st": "Etchmiadzin stn", "dir": "out", "train": "684", "route": "Yerevan → Gyumri", "dep": "07:55", "arr": "08:29", "mins": 34}, {"st": "Etchmiadzin stn", "dir": "in", "train": "687", "route": "Gyumri → Yerevan", "dep": "14:28", "arr": "15:05", "mins": 37}, {"st": "Haykashen", "dir": "in", "train": "687", "route": "Gyumri → Yerevan", "dep": "14:33", "arr": "15:05", "mins": 32}, {"st": "Sis", "dir": "in", "train": "687", "route": "Gyumri → Yerevan", "dep": "14:38", "arr": "15:05", "mins": 27}, {"st": "Masis", "dir": "in", "train": "687", "route": "Gyumri → Yerevan", "dep": "14:46", "arr": "15:05", "mins": 19}, {"st": "Noragavit", "dir": "in", "train": "687", "route": "Gyumri → Yerevan", "dep": "14:56", "arr": "15:05", "mins": 9}], "color": "#1b7f4d", "width": 20, "reach": "Haykashen (Aykashen)"}, {"rank": 2, "out": "686", "in": "685", "line": "Gyumri", "stock": "EP2D / EP2D", "outRoute": "Yerevan → Gyumri", "inRoute": "Gyumri → Yerevan", "outDep": "14:25", "inOrig": "Gyumri 18:15", "stations": ["Yerevan", "Noragavit", "Masis", "Sis", "Haykashen"], "path": [[40.155395, 44.508539], [40.157957, 44.507233], [40.154808, 44.494738], [40.152809, 44.486112], [40.152066, 44.482902], [40.149589, 44.473517], [40.147446, 44.467163], [40.146731, 44.465867], [40.14021, 44.462895], [40.1277, 44.465316], [40.114426, 44.464976], [40.113106, 44.464033], [40.106928, 44.445681], [40.10313, 44.424592], [40.089713, 44.417798], [40.078415, 44.416783], [40.070091, 44.415364], [40.065088, 44.41348], [40.063111, 44.411831], [40.062663, 44.410968], [40.061572, 44.407309], [40.061444, 44.398376], [40.063022, 44.390038], [40.06327, 44.389138], [40.06596, 44.378137], [40.067164, 44.371909], [40.066759, 44.362901], [40.064006, 44.354601], [40.064445, 44.345833], [40.065555, 44.328332], [40.068169, 44.308937]], "trips": [{"st": "Noragavit", "dir": "out", "train": "686", "route": "Yerevan → Gyumri", "dep": "14:25", "arr": "14:34", "mins": 9}, {"st": "Masis", "dir": "out", "train": "686", "route": "Yerevan → Gyumri", "dep": "14:25", "arr": "14:44", "mins": 19}, {"st": "Sis", "dir": "out", "train": "686", "route": "Yerevan → Gyumri", "dep": "14:25", "arr": "14:48", "mins": 23}, {"st": "Haykashen", "dir": "out", "train": "686", "route": "Yerevan → Gyumri", "dep": "14:25", "arr": "14:54", "mins": 29}, {"st": "Etchmiadzin stn", "dir": "out", "train": "686", "route": "Yerevan → Gyumri", "dep": "14:25", "arr": "14:59", "mins": 34}, {"st": "Etchmiadzin stn", "dir": "in", "train": "685", "route": "Gyumri → Yerevan", "dep": "20:51", "arr": "21:23", "mins": 32}, {"st": "Haykashen", "dir": "in", "train": "685", "route": "Gyumri → Yerevan", "dep": "20:57", "arr": "21:23", "mins": 26}, {"st": "Sis", "dir": "in", "train": "685", "route": "Gyumri → Yerevan", "dep": "21:03", "arr": "21:23", "mins": 20}, {"st": "Masis", "dir": "in", "train": "685", "route": "Gyumri → Yerevan", "dep": "21:06", "arr": "21:23", "mins": 17}, {"st": "Noragavit", "dir": "in", "train": "685", "route": "Gyumri → Yerevan", "dep": "21:15", "arr": "21:23", "mins": 8}], "color": "#5f9f35", "width": 15, "reach": "Haykashen (Aykashen)"}, {"rank": 3, "out": "682", "in": "681", "line": "Gyumri", "stock": "ER2 / ER2", "outRoute": "Yerevan → Gyumri", "inRoute": "Gyumri → Yerevan", "outDep": "18:25", "inOrig": "Gyumri 07:45", "stations": ["Yerevan", "Noragavit", "Masis", "Sis", "Haykashen"], "path": [[40.155395, 44.508539], [40.157957, 44.507233], [40.154808, 44.494738], [40.152809, 44.486112], [40.152066, 44.482902], [40.149589, 44.473517], [40.147446, 44.467163], [40.146731, 44.465867], [40.14021, 44.462895], [40.1277, 44.465316], [40.114426, 44.464976], [40.113106, 44.464033], [40.106928, 44.445681], [40.10313, 44.424592], [40.089713, 44.417798], [40.078415, 44.416783], [40.070091, 44.415364], [40.065088, 44.41348], [40.063111, 44.411831], [40.062663, 44.410968], [40.061572, 44.407309], [40.061444, 44.398376], [40.063022, 44.390038], [40.06327, 44.389138], [40.06596, 44.378137], [40.067164, 44.371909], [40.066759, 44.362901], [40.064006, 44.354601], [40.064445, 44.345833], [40.065555, 44.328332], [40.068169, 44.308937]], "trips": [{"st": "Noragavit", "dir": "out", "train": "682", "route": "Yerevan → Gyumri", "dep": "18:25", "arr": "18:34", "mins": 9}, {"st": "Masis", "dir": "out", "train": "682", "route": "Yerevan → Gyumri", "dep": "18:25", "arr": "18:43", "mins": 18}, {"st": "Sis", "dir": "out", "train": "682", "route": "Yerevan → Gyumri", "dep": "18:25", "arr": "18:47", "mins": 22}, {"st": "Haykashen", "dir": "out", "train": "682", "route": "Yerevan → Gyumri", "dep": "18:25", "arr": "18:53", "mins": 28}, {"st": "Etchmiadzin stn", "dir": "out", "train": "682", "route": "Yerevan → Gyumri", "dep": "18:25", "arr": "18:58", "mins": 33}, {"st": "Etchmiadzin stn", "dir": "in", "train": "681", "route": "Gyumri → Yerevan", "dep": "10:23", "arr": "10:57", "mins": 34}, {"st": "Haykashen", "dir": "in", "train": "681", "route": "Gyumri → Yerevan", "dep": "10:27", "arr": "10:57", "mins": 30}, {"st": "Sis", "dir": "in", "train": "681", "route": "Gyumri → Yerevan", "dep": "10:32", "arr": "10:57", "mins": 25}, {"st": "Masis", "dir": "in", "train": "681", "route": "Gyumri → Yerevan", "dep": "10:38", "arr": "10:57", "mins": 19}, {"st": "Noragavit", "dir": "in", "train": "681", "route": "Gyumri → Yerevan", "dep": "10:48", "arr": "10:57", "mins": 9}], "color": "#c99a12", "width": 11, "reach": "Haykashen (Aykashen)"}, {"rank": 4, "out": "7016", "in": "7011", "line": "Araks", "stock": "ER2 / ER2", "outRoute": "Yerevan → Araks", "inRoute": "Araks → Yerevan", "outDep": "19:35", "inOrig": "Araks 07:10", "stations": ["Yerevan", "Noragavit", "Masis", "Sis", "Haykashen", "Etchmiadzin stn"], "path": [[40.155395, 44.508539], [40.157957, 44.507233], [40.154808, 44.494738], [40.152809, 44.486112], [40.152066, 44.482902], [40.149589, 44.473517], [40.147446, 44.467163], [40.146731, 44.465867], [40.14021, 44.462895], [40.1277, 44.465316], [40.114426, 44.464976], [40.113106, 44.464033], [40.106928, 44.445681], [40.10313, 44.424592], [40.089713, 44.417798], [40.078415, 44.416783], [40.070091, 44.415364], [40.065088, 44.41348], [40.063111, 44.411831], [40.062663, 44.410968], [40.061572, 44.407309], [40.061444, 44.398376], [40.063022, 44.390038], [40.06327, 44.389138], [40.06596, 44.378137], [40.067164, 44.371909], [40.066759, 44.362901], [40.064006, 44.354601], [40.064486, 44.345837], [40.066434, 44.328426], [40.068025, 44.311007], [40.068169, 44.308937], [40.068621, 44.293451], [40.067976, 44.276688], [40.069067, 44.266041]], "trips": [{"st": "Masis", "dir": "out", "train": "7016", "route": "Yerevan → Araks", "dep": "19:35", "arr": "19:51", "mins": 16}, {"st": "Sis", "dir": "out", "train": "7016", "route": "Yerevan → Araks", "dep": "19:35", "arr": "19:55", "mins": 20}, {"st": "Haykashen", "dir": "out", "train": "7016", "route": "Yerevan → Araks", "dep": "19:35", "arr": "20:01", "mins": 26}, {"st": "Etchmiadzin stn", "dir": "out", "train": "7016", "route": "Yerevan → Araks", "dep": "19:35", "arr": "20:05", "mins": 30}, {"st": "Etchmiadzin stn", "dir": "in", "train": "7011", "route": "Araks → Yerevan", "dep": "07:50", "arr": "08:27", "mins": 37}, {"st": "Haykashen", "dir": "in", "train": "7011", "route": "Araks → Yerevan", "dep": "07:54", "arr": "08:27", "mins": 33}, {"st": "Sis", "dir": "in", "train": "7011", "route": "Araks → Yerevan", "dep": "07:59", "arr": "08:27", "mins": 28}, {"st": "Masis", "dir": "in", "train": "7011", "route": "Araks → Yerevan", "dep": "08:09", "arr": "08:27", "mins": 18}], "color": "#dd6b27", "width": 8, "reach": "Etchmiadzin station (Jrarat)"}, {"rank": 5, "out": "6518", "in": "6512", "line": "Yeraskh", "stock": "EP2D / EP2D", "outRoute": "Yerevan → Yeraskh", "inRoute": "Yeraskh → Yerevan", "outDep": "19:00", "inOrig": "Yeraskh 06:30", "stations": ["Yerevan", "Noragavit", "Masis-Koltso", "Mkhchyan"], "path": [[40.155395, 44.508539], [40.147074, 44.505152], [40.145803, 44.503773], [40.142322, 44.495458], [40.138015, 44.485845], [40.136715, 44.481944], [40.135569, 44.478882], [40.120287, 44.468626], [40.118853, 44.467994], [40.113106, 44.464033], [40.110467, 44.461613], [40.109168, 44.460316], [40.102526, 44.453307], [40.095371, 44.443983], [40.086667, 44.436944], [40.079167, 44.429166], [40.059722, 44.431112], [40.057222, 44.447223], [40.0525, 44.458889], [40.047777, 44.470833], [40.041668, 44.480556], [40.039761, 44.483176], [40.038462, 44.484962], [40.035, 44.489721], [40.025893, 44.499881]], "trips": [{"st": "Noragavit", "dir": "out", "train": "6518", "route": "Yerevan → Yeraskh", "dep": "19:00", "arr": "19:10", "mins": 10}, {"st": "Masis-Koltso", "dir": "out", "train": "6518", "route": "Yerevan → Yeraskh", "dep": "19:00", "arr": "19:19", "mins": 19}, {"st": "Mkhchyan", "dir": "out", "train": "6518", "route": "Yerevan → Yeraskh", "dep": "19:00", "arr": "19:28", "mins": 28}, {"st": "Dallar", "dir": "out", "train": "6518", "route": "Yerevan → Yeraskh", "dep": "19:00", "arr": "19:33", "mins": 33}, {"st": "Dallar", "dir": "in", "train": "6512", "route": "Yeraskh → Yerevan", "dep": "07:37", "arr": "08:17", "mins": 40}, {"st": "Mkhchyan", "dir": "in", "train": "6512", "route": "Yeraskh → Yerevan", "dep": "07:44", "arr": "08:17", "mins": 33}, {"st": "Masis-Koltso", "dir": "in", "train": "6512", "route": "Yeraskh → Yerevan", "dep": "07:59", "arr": "08:17", "mins": 18}, {"st": "Noragavit", "dir": "in", "train": "6512", "route": "Yeraskh → Yerevan", "dep": "08:08", "arr": "08:17", "mins": 9}], "color": "#c23a2e", "width": 5, "reach": "Mkhchyan"}], "stations": {"Yerevan": {"name": "Yerevan Central (Sasuntsi Davit)", "lat": 40.155395, "lon": 44.508539, "note": ""}, "Noragavit": {"name": "Noragavit", "lat": 40.113106, "lon": 44.464033, "note": ""}, "Masis": {"name": "Masis", "lat": 40.062023, "lon": 44.410674, "note": ""}, "Masis-Koltso": {"name": "Masis-Koltso (Masis ring platform)", "lat": 40.063611, "lon": 44.430723, "note": "Approximate position: platform on the Yeraskh-line curve beside Masis station."}, "Sis": {"name": "Sis", "lat": 40.06327, "lon": 44.389138, "note": ""}, "Haykashen": {"name": "Haykashen (Aykashen)", "lat": 40.068169, "lon": 44.308937, "note": ""}, "Etchmiadzin stn": {"name": "Etchmiadzin station (Jrarat)", "lat": 40.069067, "lon": 44.266041, "note": "In Jrarat village, about 10 km south of Vagharshapat (Etchmiadzin) city."}, "Mkhchyan": {"name": "Mkhchyan", "lat": 40.02589266908927, "lon": 44.499880959500075, "note": "Approximate position: on the track at the edge of Mkhchyan village."}}, "buses": [{"id": "203", "from": "Kilikia Central Bus Station", "to": "Vagharshapat (Etchmiadzin)", "color": "#2f62d8", "operator": "National Transport Authority", "run": "32 min full route", "verdict": "Vagharshapat is 2 min over 30. Times at intermediate stops are not published.", "out": "Daily from Kilikia: 07:30, 07:40, 07:50, then every 10 min 08:00–21:50, then 22:00, 22:15, 22:30.", "in": "Daily from Vagharshapat, about every 10 min. Exact times from Vagharshapat are not published.", "stops": "Kilikia → Tairov I → Parakar I → Parakar Airport Rd → Ptghunk (Musaler Memorial) → Ptghunk I → Ptghunk II → Zvartnots Cathedral → Zvartnots Town → St Hripsime Church → Palace of Culture → Etchmiadzin → Vagharshapat Bus Station", "note": "TfA lists 203 as a bus; Yandex labels it a minibus. Check the vehicle type.", "tfa": "https://t-armenia.com/en/route/4/t/7", "wp": [["Kilikia Central Bus Station", 40.172338, 44.490772], ["Zvartnots Cathedral", 40.159714, 44.336575], ["St Hripsime Church", 40.167, 44.3095], ["Etchmiadzin Cathedral (terminus area)", 40.16186, 44.291]], "fallback": [[40.172338, 44.490772], [40.159714, 44.336575], [40.167, 44.3095], [40.16186, 44.291]]}, {"id": "261", "from": "Northern Bus Station", "to": "Abovyan", "color": "#7a4fd4", "operator": "Yerevan Bus CJSC", "run": "About 10 min from Northern Bus Station (55 min full route)", "verdict": "Within 30 min. The 10-min figure is from a travel guide, not TfA.", "out": "Leaves Central Railway Station daily 08:40, then :00, :20, :40 each hour 09:00–21:40, then 22:00 and 22:10; calls at Northern Bus Station on the way.", "in": "Leaves Abovyan daily at :10, :30, :50 each hour, 07:10–20:50.", "stops": "Northern Bus Station-B → Verin Ptghni I → Verin Ptghni II → Abovyan M4 Exit → Abovyan Railway Station → Yerevanyan St Junction → City Centre → Hanrapetutyan Roundabout → Medical Centre → Hatis St → Abovyan Bus Terminus", "note": "TfA says its times are approximate.", "tfa": "https://t-armenia.com/en/route/5/t/18", "wp": [["Northern Bus Station", 40.23926, 44.56941], ["Abovyan Railway Station", 40.269801, 44.617008], ["Abovyan town centre", 40.27389, 44.62556]], "fallback": [[40.23926, 44.56941], [40.240393, 44.563478], [40.252766, 44.5841], [40.256891, 44.600598], [40.26514, 44.617096], [40.269801, 44.617008], [40.27389, 44.62556]]}, {"id": "284", "from": "Gai Bus Station", "to": "Garni and Goght", "color": "#0c8ea3", "operator": "National Transport Authority", "run": "1 h 05 min full route", "verdict": "Garni is not within 30 min. Only the Jrvezh stops and possibly Voghjaberd are.", "out": "Daily from Gai: 11:30, 12:30, 13:20, 17:00, 17:50, 19:00, 21:00.", "in": "Daily from Goght: 07:20, 07:50, 09:00, 13:30, 14:20, 15:50, 19:30.", "stops": "Gai → Jrvezh Bus Station → Jrvezh South → Jrvezh Forest Park → Voghjaberd → Geghadir → Hatsavan junction → Garni (West, WWII Memorial, Garni Temple, Town Centre, Garni Road I–III) → Goght", "note": "Riders report the bus leaves when full rather than on schedule.", "tfa": "https://t-armenia.com/en/route/64/t/144", "wp": [["Gai Bus Station", 40.19924, 44.56644], ["Jrvezh", 40.18556, 44.58694], ["Voghjaberd", 40.16639, 44.64833], ["Geghadir", 40.15639, 44.65111], ["Garni Temple", 40.112421, 44.730277], ["Goght", 40.13944, 44.77944]], "fallback": [[40.19924, 44.56644], [40.18556, 44.58694], [40.16639, 44.64833], [40.15639, 44.65111], [40.112421, 44.730277], [40.13944, 44.77944]]}, {"id": "451", "from": "South Bus Station (Sasuntsi Davit)", "to": "Artashat", "color": "#c43489", "operator": "National Transport Authority", "run": "59 min full route", "verdict": "Artashat is not within 30 min. Stops as far as roughly Marmarashen probably are.", "out": "Daily from Southern Bus Station: 08:35, 09:15, 09:50, 10:25, 11:00, 11:35, 12:10, 12:45, 13:20, 13:55, 14:30, 15:05, 15:40, 16:15, 16:50, 17:25, 18:00, 18:35, 19:10, 19:45.", "in": "Daily from Artashat: 07:15, 07:50, 08:25, 09:00, 09:35, 10:10, 10:45, 11:20, 11:55, 12:30, 13:05, 13:40, 14:15, 14:50, 15:25, 16:00, 16:35, 17:10, 17:45, 18:20.", "stops": "Southern Bus Station → Hayrenik → Labour Square → Arshakunyats Ave → Noragavit → Ayntap → Marmarashen → Jrahovit → Arevabuyr → Mrgavet → Mkhchyan → Dimitrov → Masis (village) → Burastan → Azatavan → Baghramyan → Berkanush → Dalar → Mrgavan → Artashat", "note": "Bus 456 to Masis also leaves here about every 20 min, but no official run time was found.", "tfa": "https://t-armenia.com/en/route/126/t/267", "wp": [["South Bus Station", 40.15586, 44.506964], ["Marmarashen", 40.0575, 44.47111], ["Mkhchyan", 40.02, 44.49111], ["Dimitrov", 40.00806, 44.48806], ["Burastan", 39.99167, 44.49694], ["Dalar", 39.96694, 44.53639], ["Artashat town centre", 39.95389, 44.55056]], "fallback": [[40.15586, 44.506964], [40.0575, 44.47111], [40.02, 44.49111], [40.00806, 44.48806], [39.99167, 44.49694], [39.96694, 44.53639], [39.95389, 44.55056]]}]};
+const store = {
+  get(k, d){ try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch(e){ return d; } },
+  set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); return localStorage.getItem(k) === JSON.stringify(v); } catch(e){ return false; } }
+};
+const state = Object.assign({ trains: true, buses: true, ranks: [1,2,3,4,5], busIds: ['203','261','284','451'], circles: true, radius: 1500 }, store.get('ycm-state', {}));
+const save = () => store.set('ycm-state', state);
+
+/* ---------- panel ---------- */
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const rankList = document.getElementById('rankList');
+DATA.ranks.forEach(r => {
+  const reach = DATA.stations[r.stations[r.stations.length-1]].name;
+  rankList.insertAdjacentHTML('beforeend', `
+  <label class="row"><input type="checkbox" data-rank="${r.rank}">
+    <span class="sw rank" style="background:${r.color}">${r.rank}</span>
+    <span><span class="t1">${esc(r.line)} line · ${r.out} / ${r.in}</span><br>
+    <span class="t2">Out <b>${r.outDep}</b> · in from ${esc(r.inOrig)} · reaches ${esc(reach)} · ${esc(r.stock)}</span></span></label>`);
+});
+const busList = document.getElementById('busList');
+DATA.buses.forEach(b => {
+  busList.insertAdjacentHTML('beforeend', `
+  <label class="row"><input type="checkbox" data-bus="${b.id}">
+    <span class="sw bus" style="background:${b.color}">${b.id}</span>
+    <span><span class="t1">${esc(b.to)} → ${esc(b.from)}</span><br>
+    <span class="t2">${esc(b.run)}</span><br><span class="status" id="st-${b.id}"></span></span></label>`);
+});
+/* ---------- list.am links ---------- */
+const SEARCHES = {
+  houses: { label: 'Houses', desc: 'new developments, $50,000–$90,000',
+    base: 'https://www.list.am/category/1391?n=&sname=&s=&cmtype=&crc=1&price1=50000&price2=90000&_a4=&_a5=&_a37=&_a34=&_a136_1=&_a136_2=&_a81=&_a76=&_a35_1=&_a35_2=&_a98=&_a100_1=&_a100_2=&_a99=&gl=8&c=1391&center=40.1334706%2C44.2972458&zoom=10' },
+  land: { label: 'Land', desc: 'plots of 300–400 m², $10,000–$50,000',
+    base: 'https://www.list.am/category/1447?n=0&sname=&s=&cmtype=&crc=1&price1=10000&price2=50000&sq_price1=&sq_price2=&_a81=&_a14_1=300&_a14_2=400&gl=8&c=1447&center=40.10295%2C44.5044908&zoom=12' }
+};
+
+const ZOOM_FOR = { 1000: 15, 1500: 14, 2000: 14, 3000: 13 };
+const HOME_STATIONS = ['Noragavit', 'Masis', 'Masis-Koltso', 'Sis', 'Haykashen', 'Etchmiadzin stn', 'Mkhchyan'];
+function listamUrl(id, kind = 'houses'){ const s = DATA.stations[id]; return listamAt(s.lat, s.lon, kind); }
+function listamAt(lat, lon, kind = 'houses'){
+  const s = { lat, lon }, u = new URL(SEARCHES[kind].base);
+  u.searchParams.set('center', s.lat.toFixed(6) + ',' + s.lon.toFixed(6));
+  u.searchParams.set('zoom', String(ZOOM_FOR[state.radius] || 14));
+  return u.toString();
+}
+function within30(id){
+  const ranks = [], mins = [];
+  DATA.ranks.forEach(r => r.trips.forEach(t => { if (t.st === id && t.mins <= 30) { if (!ranks.includes(r.rank)) ranks.push(r.rank); mins.push(t.mins); } }));
+  return { ranks: ranks.sort(), lo: Math.min(...mins), hi: Math.max(...mins) };
+}
+const shortName = id => ({ 'Masis-Koltso': 'Masis-Koltso', 'Haykashen': 'Haykashen', 'Etchmiadzin stn': 'Etchmiadzin station (Jrarat)' })[id] || DATA.stations[id].name;
+function renderHomeList(){
+  document.getElementById('homeList').innerHTML = HOME_STATIONS.map(id => {
+    const w = within30(id), span = w.lo === w.hi ? `${w.lo} min` : `${w.lo}–${w.hi} min`;
+    return `<div class="home">
+      <span class="t1">${esc(shortName(id))}</span>
+      <span class="go">${Object.entries(SEARCHES).map(([k, v]) => `<a href="${esc(listamUrl(id, k))}" target="_blank" rel="noopener" aria-label="${v.label} near ${esc(shortName(id))} on list.am">${v.label} ↗</a>`).join('')}</span>
+      <span class="t2">Risk rank${w.ranks.length > 1 ? 's' : ''} ${w.ranks.join(', ')} · ${span} by train</span></div>`;
+  }).join('');
+  const outer = b => b.wp.slice(1).reverse();   // commute order: outer end first, toward Yerevan
+  document.getElementById('busHomeList').innerHTML = DATA.buses.map(b => `
+    <details class="busgrp"><summary><span class="sw bus" style="background:${b.color};display:inline-grid;width:30px;margin-right:6px">${b.id}</span>${esc(b.to)} → ${esc(b.from)}</summary>
+    <div class="homes">${outer(b).map(w => `<div class="home"><span class="t1">${esc(w[0].replace(' (terminus area)', ''))}</span>
+      <span class="go">${Object.entries(SEARCHES).map(([k, v]) => `<a href="${esc(listamAt(w[1], w[2], k))}" target="_blank" rel="noopener" aria-label="${v.label} near ${esc(w[0])} on list.am">${v.label} ↗</a>`).join('')}</span>
+      <span class="t2">Bus ${b.id} to ${esc(b.from)}</span></div>`).join('')}</div></details>`).join('');
+}
+renderHomeList();
+
+function syncPanel(){
+  document.getElementById('showTrains').checked = state.trains;
+  document.getElementById('showBuses').checked = state.buses;
+  rankList.querySelectorAll('input').forEach(i => i.checked = state.ranks.includes(+i.dataset.rank));
+  busList.querySelectorAll('input').forEach(i => i.checked = state.busIds.includes(i.dataset.bus));
+  document.getElementById('trainSec').classList.toggle('dim', !state.trains);
+  document.getElementById('busSec').classList.toggle('dim', !state.buses);
+  document.getElementById('showCircles').checked = state.circles;
+  document.getElementById('radius').value = String(state.radius);
+}
+syncPanel();
+document.getElementById('showTrains').addEventListener('change', e => { state.trains = e.target.checked; changed(); });
+document.getElementById('showBuses').addEventListener('change', e => { state.buses = e.target.checked; changed(); });
+document.getElementById('showCircles').addEventListener('change', e => { state.circles = e.target.checked; changed(); });
+document.getElementById('radius').addEventListener('change', e => { state.radius = +e.target.value; state.circles = true; renderHomeList(); changed(); });
+rankList.addEventListener('change', e => {
+  const n = +e.target.dataset.rank; state.ranks = e.target.checked ? [...new Set([...state.ranks, n])].sort() : state.ranks.filter(x => x !== n);
+  if (e.target.checked) state.trains = true; changed();
+});
+busList.addEventListener('change', e => {
+  const id = e.target.dataset.bus; state.busIds = e.target.checked ? [...new Set([...state.busIds, id])] : state.busIds.filter(x => x !== id);
+  if (e.target.checked) state.buses = true; changed();
+});
+document.querySelectorAll('[data-ranks]').forEach(b => b.addEventListener('click', () => {
+  state.ranks = b.dataset.ranks ? b.dataset.ranks.split(',').map(Number) : []; if (state.ranks.length) state.trains = true; changed(); }));
+document.querySelectorAll('[data-buses]').forEach(b => b.addEventListener('click', () => {
+  state.busIds = b.dataset.buses ? b.dataset.buses.split(',') : []; if (state.busIds.length) state.buses = true; changed(); }));
+const panel = document.getElementById('panel'), sheetbtn = document.getElementById('sheetbtn');
+sheetbtn.addEventListener('click', () => { panel.classList.toggle('collapsed'); sheetbtn.textContent = panel.classList.contains('collapsed') ? 'Show panel' : 'Hide panel'; });
+function changed(){ save(); syncPanel(); if (window.ymaps && map) render(); }
+
+/* ---------- key + Yandex loader ---------- */
+const gate = document.getElementById('keygate'), keymsg = document.getElementById('keymsg');
+const urlKey = new URLSearchParams(location.search).get('apikey');
+let key = urlKey || store.get('ycm-key', '');
+document.getElementById('changeKey').addEventListener('click', () => { gate.hidden = false; document.getElementById('apikey').value = key || ''; });
+let keySaved = true, loading = false;
+const loadBtn = document.querySelector('#keyform button[type=submit]');
+document.getElementById('keyform').addEventListener('submit', e => {
+  e.preventDefault();
+  const newKey = document.getElementById('apikey').value.trim();
+  if (!newKey) return;
+  keySaved = store.set('ycm-key', newKey);
+  if (window.ymaps && newKey !== key && keySaved) { location.reload(); return; }   // switching keys needs a fresh page
+  key = newKey;
+  if (window.ymaps) { gate.hidden = true; return; }
+  loadYandex();                                                                    // start straight away; no reload needed
+});
+function loadYandex(){
+  if (!key) { gate.hidden = false; return; }
+  if (loading) return;
+  loading = true; keymsg.textContent = ''; loadBtn.disabled = true; loadBtn.textContent = 'Loading map…';
+  const old = document.getElementById('ymaps-script'); if (old) old.remove();
+  const s = document.createElement('script'); s.id = 'ymaps-script';
+  s.src = 'https://api-maps.yandex.ru/2.1/?apikey=' + encodeURIComponent(key) + '&lang=en_US';
+  s.onload = () => { if (window.ymaps) ymaps.ready(() => { loading = false; gate.hidden = true; init();
+      if (!keySaved) showSaveNote(); }); else fail('Yandex did not accept this key.'); };
+  s.onerror = () => fail('Could not reach Yandex Maps. Check your internet connection or the key.');
+  document.head.appendChild(s);
+  setTimeout(() => { if (!window.ymaps) fail('Yandex Maps did not load. Check the key; a new key can take up to 15 minutes to activate.'); }, 20000);
+}
+function fail(msg){
+  if (window.ymaps && map) return;
+  loading = false; gate.hidden = false; loadBtn.disabled = false; loadBtn.textContent = 'Load map';
+  keymsg.textContent = msg + (location.protocol === 'file:' ? '' : ' If you opened this in OneDrive or another online viewer, open the file from your computer in Chrome, Edge or Firefox instead.');
+  document.getElementById('apikey').value = key || '';
+}
+function showSaveNote(){
+  const p = document.createElement('p'); p.className = 'status err';
+  p.textContent = 'This browser view blocks saving, so you will need to paste the key again next time.';
+  document.getElementById('changeKey').parentElement.before(p);
+}
+
+/* ---------- map ---------- */
+let map, trainLines = {}, stationMarks = {}, busObjs = {}, circles = {};
+const LINE_W = 3, LINE_GAP = 4;            // px: every train line is the same thin width, drawn side by side where track is shared
+const CAPTION_ZOOM = 13;                  // station names appear from this zoom up so they don't pile on each other
+const fmtMin = m => m <= 30 ? `<span class="ok">${m} min</span>` : `<span class="over">${m} min</span>`;
+const dot = r => `<span class="dot" style="background:${DATA.ranks[r-1].color}">${r}</span>`;
+
+/* Offset a [lat,lon] polyline sideways by `meters` (positive = left of travel direction). */
+function offsetPath(path, meters){
+  if (!meters) return path;
+  const lat0 = path[0][0], kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 110540;
+  const P = path.map(([la, lo]) => [lo * kx, la * ky]);
+  const out = P.map((p, i) => {
+    const a = P[Math.max(0, i - 1)], b = P[Math.min(P.length - 1, i + 1)];
+    const n1 = i > 0 ? norm(P[i - 1], p) : null, n2 = i < P.length - 1 ? norm(p, P[i + 1]) : null;
+    let nx, ny;
+    if (n1 && n2) { nx = n1[0] + n2[0]; ny = n1[1] + n2[1]; const l = Math.hypot(nx, ny) || 1; nx /= l; ny /= l;
+      const c = Math.max(0.5, nx * n1[0] + ny * n1[1]); nx /= c; ny /= c; }
+    else { [nx, ny] = n1 || n2; }
+    return [p[0] + nx * meters, p[1] + ny * meters];
+  });
+  return out.map(([x, y]) => [y / ky, x / kx]);
+  function norm(a, b){ const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1; return [-dy / l, dx / l]; }
+}
+const metersPerPx = z => 156543.03392 * Math.cos(40.1 * Math.PI / 180) / Math.pow(2, z);
+
+function init(){
+  map = new ymaps.Map('map', { center: [40.13, 44.47], zoom: 11, controls: ['zoomControl', 'typeSelector', 'fullscreenControl'] });
+  DATA.ranks.forEach(r => {
+    trainLines[r.rank] = new ymaps.Polyline(r.path, { hintContent: `Risk rank ${r.rank}: trains ${r.out} / ${r.in} (${r.line} line)` },
+      { strokeColor: r.color, strokeWidth: LINE_W, strokeOpacity: 1, zIndex: 100 + r.rank });
+    trainLines[r.rank].events.add('click', e => map.balloon.open(e.get('coords'), rankBalloon(r)));
+  });
+  Object.entries(DATA.stations).forEach(([id, s]) => {
+    const name = ({'Yerevan':'Yerevan Central','Masis-Koltso':'Masis-Koltso','Haykashen':'Haykashen','Etchmiadzin stn':'Etchmiadzin stn (Jrarat)'})[id] || s.name;
+    stationMarks[id] = new ymaps.Placemark([s.lat, s.lon], { hintContent: name, caption: name, captionZoom: CAPTION_ZOOM },
+      { preset: 'islands#circleDotIconWithCaption', iconColor: '#1d2622', zIndex: 300 });
+  });
+  HOME_STATIONS.forEach(id => {
+    const s = DATA.stations[id];
+    circles[id] = new ymaps.Circle([[s.lat, s.lon], state.radius], { hintContent: `${shortName(id)}: walking distance` },
+      { fillColor: '#1b6b4714', strokeColor: '#1b6b47', strokeOpacity: 0.55, strokeWidth: 1.5, strokeStyle: 'dash', zIndex: 50 });
+    circles[id].events.add('click', () => map.balloon.open([s.lat, s.lon], stationBalloon(id)));
+  });
+  DATA.buses.forEach(b => {
+    const marks = new ymaps.GeoObjectCollection();
+    b.wp.forEach((w, i) => {
+      const first = i === 0;
+      marks.add(new ymaps.Placemark([w[1], w[2]], { hintContent: `Bus ${b.id}: ${w[0]}`, caption: first ? `${w[0]} (bus ${b.id})` : '', captionZoom: b.id === '451' ? 16 : 12,
+        balloonContent: first ? busBalloon(b) : stopBalloon(b, w) },
+        { preset: first ? 'islands#dotIconWithCaption' : 'islands#circleIcon', iconColor: b.color, zIndex: first ? 320 : 250 }));
+    });
+    busObjs[b.id] = { marks, route: null, fallback: null };
+  });
+  map.events.add('boundschange', e => { if (e.get('newZoom') !== e.get('oldZoom')) { layoutTrains(); captions(); } });
+  render();
+}
+
+/* Place visible train lines side by side (same width) and keep captions off at low zoom. */
+function layoutTrains(){
+  const vis = DATA.ranks.filter(r => state.trains && state.ranks.includes(r.rank));
+  const mpp = metersPerPx(map.getZoom());
+  vis.forEach((r, i) => {
+    const slot = i - (vis.length - 1) / 2;
+    trainLines[r.rank].geometry.setCoordinates(offsetPath(r.path, slot * LINE_GAP * mpp));
+  });
+}
+function captions(){
+  const z = map.getZoom();
+  const apply = pm => pm.properties.set('iconCaption', z >= pm.properties.get('captionZoom') ? pm.properties.get('caption') : '');
+  Object.values(stationMarks).forEach(apply);
+  Object.values(busObjs).forEach(o => o.marks.each(apply));
+}
+
+function rankBalloon(r){
+  return `<div class="bl"><h3>${dot(r.rank)} Risk rank ${r.rank}: ${esc(r.line)} line</h3>
+  <p class="n">${esc(r.outRoute)} train ${r.out} leaves Yerevan ${r.outDep}. ${esc(r.inRoute)} train ${r.in} leaves ${esc(r.inOrig)}. Rolling stock ${esc(r.stock)}. Daily, all year.</p>
+  <table><tr><th>Station</th><th>From Yerevan</th><th>To Yerevan</th></tr>
+  ${r.stations.slice(1).map(st => {
+    const o = r.trips.find(t => t.st === st && t.dir === 'out'), i = r.trips.find(t => t.st === st && t.dir === 'in');
+    return `<tr><td class="r">${esc(DATA.stations[st].name)}</td><td>${o ? o.arr + ' · ' + fmtMin(o.mins) : 'no stop'}</td><td>${i ? i.dep + ' · ' + fmtMin(i.mins) : 'no stop'}</td></tr>`;
+  }).join('')}</table></div>`;
+}
+
+function stationBalloon(id){
+  const s = DATA.stations[id], vis = DATA.ranks.filter(r => state.ranks.includes(r.rank));
+  const link = `https://yandex.com/maps/?rtext=40.155395,44.508539~${s.lat},${s.lon}&rtt=mt`;
+  if (id === 'Yerevan') {
+    return `<div class="bl"><h3>${esc(s.name)}</h3><p class="n">Starting station for every train on this map.</p>
+    <table><tr><th>Rank</th><th>Leaves Yerevan</th><th>Returns to Yerevan</th></tr>
+    ${vis.map(r => { const i = r.trips.find(t => t.dir === 'in'); return `<tr><td class="r">${dot(r.rank)} ${r.out} / ${r.in}</td><td>${r.outDep}</td><td>${i.arr}</td></tr>`; }).join('')}
+    </table></div>`;
+  }
+  const rows = [];
+  vis.forEach(r => r.trips.filter(t => t.st === id).forEach(t => rows.push({ r, t })));
+  rows.sort((a, b) => a.t.dir.localeCompare(b.t.dir) || a.r.rank - b.r.rank);
+  return `<div class="bl"><h3>${esc(s.name)}</h3>${s.note ? `<p class="n">${esc(s.note)}</p>` : ''}
+  <table><tr><th>Rank</th><th>Train</th><th>Direction</th><th>Departs</th><th>Arrives</th><th>Time</th></tr>
+  ${rows.map(({ r, t }) => `<tr><td class="r">${dot(r.rank)}</td><td>${t.train}</td><td class="r">${t.dir === 'in' ? 'To Yerevan' : 'From Yerevan'}</td><td>${t.dep}</td><td>${t.arr}</td><td>${fmtMin(t.mins)}</td></tr>`).join('')}
+  </table><p>All trains run daily, all year. <a href="${link}" target="_blank" rel="noopener">Directions in Yandex Maps</a></p>
+  ${HOME_STATIONS.includes(id) ? Object.entries(SEARCHES).map(([k, v]) => `<p><a href="${esc(listamUrl(id, k))}" target="_blank" rel="noopener"><b>${v.label} near this station on list.am</b></a> (${esc(v.desc)})</p>`).join('') : ''}</div>`;
+}
+
+function stopBalloon(b, w){
+  const name = w[0].replace(' (terminus area)', '');
+  return `<div class="bl"><h3><span class="dot" style="background:${b.color};width:auto;padding:0 5px;border-radius:4px">${b.id}</span> ${esc(name)}</h3>
+  <p class="n">On bus ${b.id} toward ${esc(b.from)}. Morning, to Yerevan: ${esc(b.in)}</p>
+  ${Object.entries(SEARCHES).map(([k, v]) => `<p><a href="${esc(listamAt(w[1], w[2], k))}" target="_blank" rel="noopener"><b>${v.label} near this stop on list.am</b></a> (${esc(v.desc)})</p>`).join('')}
+  </div>`;
+}
+function busBalloon(b){
+  const stopsRev = b.stops.split(' → ').reverse().join(' → ');
+  return `<div class="bl"><h3><span class="dot" style="background:${b.color};width:auto;padding:0 5px;border-radius:4px">${b.id}</span> ${esc(b.to)} → ${esc(b.from)}</h3>
+  <p class="n">${esc(b.operator)} · ${esc(b.run)}. ${esc(b.verdict)}</p>
+  <p><b>Morning, to Yerevan.</b> ${esc(b.in)}</p><p><b>Return, from Yerevan.</b> ${esc(b.out)}</p>
+  <p><b>Stops toward Yerevan.</b> ${esc(stopsRev)}</p><p class="n">${esc(b.note)} <a href="${b.tfa}" target="_blank" rel="noopener">Official timetable</a></p></div>`;
+}
+
+function setVisible(obj, on){
+  if (!obj) return;
+  const has = map.geoObjects.indexOf(obj) !== -1;
+  if (on && !has) map.geoObjects.add(obj); else if (!on && has) map.geoObjects.remove(obj);
+}
+
+function render(){
+  DATA.ranks.forEach(r => setVisible(trainLines[r.rank], state.trains && state.ranks.includes(r.rank)));
+  layoutTrains();
+  Object.keys(DATA.stations).forEach(id => {
+    const served = id === 'Yerevan' ? state.ranks.length > 0 :
+      DATA.ranks.some(r => state.ranks.includes(r.rank) && r.trips.some(t => t.st === id && t.mins <= 30));
+    stationMarks[id].properties.set('balloonContent', stationBalloon(id));
+    setVisible(stationMarks[id], state.trains && served);
+    if (circles[id]) { circles[id].geometry.setRadius(state.radius); setVisible(circles[id], state.trains && served && state.circles); }
+  });
+  DATA.buses.forEach(b => {
+    const on = state.buses && state.busIds.includes(b.id), o = busObjs[b.id];
+    if (on && !o.route && !o.fallback && !o.pending) buildBus(b);
+    setVisible(o.route, on); setVisible(o.fallback, on); setVisible(o.marks, on);
+  });
+  captions();
+}
+
+function setStatus(id, text, err){ const st = document.getElementById('st-' + id); st.textContent = text; st.className = 'status' + (err ? ' err' : ''); }
+
+function buildBus(b){
+  const o = busObjs[b.id]; o.pending = true;
+  setStatus(b.id, 'Asking Yandex for the road path…');
+  const route = new ymaps.multiRouter.MultiRoute(
+    { referencePoints: b.wp.slice().reverse().map(w => [w[1], w[2]]), params: { routingMode: 'auto', results: 1 } },
+    { boundsAutoApply: false, wayPointVisible: false, viaPointVisible: false, pinVisible: false,
+      routeActiveStrokeColor: b.color, routeActiveStrokeWidth: 4, routeStrokeColor: b.color, routeStrokeWidth: 4,
+      routeActiveMarkerVisible: false, routeOpenBalloonOnClick: false, zIndex: 200 });
+  route.events.add('click', e => map.balloon.open(e.get('coords'), busBalloon(b)));
+  const useFallback = why => {
+    o.pending = false; if (o.route) { setVisible(o.route, false); o.route = null; }
+    o.fallback = new ymaps.Polyline(b.fallback.slice().reverse(), { hintContent: `Bus ${b.id} (approximate path)` },
+      { strokeColor: b.color, strokeWidth: 4, strokeStyle: 'shortdash', zIndex: 200 });
+    o.fallback.events.add('click', e => map.balloon.open(e.get('coords'), busBalloon(b)));
+    setStatus(b.id, 'Dashed: straight lines between stops. Yandex said: ' + why, true);
+    render();
+  };
+  route.model.events.add('requestsuccess', () => {
+    o.pending = false;
+    if (!route.getActiveRoute()) return useFallback('no road route found');
+    o.route = route; setStatus(b.id, 'Road path from Yandex'); render();
+  });
+  route.model.events.add('requestfail', e => {
+    const err = e.get('error'); useFallback((err && (err.message || err.toString())) || 'request failed');
+  });
+  setTimeout(() => { if (o.pending) useFallback('no reply within 15 seconds'); }, 15000);
+  map.geoObjects.add(route);   // the request starts once the route is on the map
+  o.route = route;
+}
+
+loadYandex();
+</script>
+</body>
+</html>
