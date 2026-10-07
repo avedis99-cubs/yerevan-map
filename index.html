@@ -57,6 +57,15 @@ a{color:var(--accent)}
 .homes{display:flex;flex-direction:column;gap:6px}
 .home{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:8px}
 .home .t2{grid-column:1}
+.filters{display:flex;flex-direction:column;gap:10px}
+.fgrp{border:1px solid var(--line);border-radius:8px;padding:8px 10px;display:grid;grid-template-columns:7.2em minmax(0,1fr) 1.4em minmax(0,1fr);gap:6px 8px;align-items:center}
+.fgrp .fh{grid-column:1/-1;display:flex;justify-content:space-between;align-items:baseline;font-weight:600}
+.fgrp .fh .t2{font-weight:400}
+.fgrp label{font-size:12.5px;color:var(--muted);white-space:nowrap}
+.fgrp label.to{text-align:center}
+.fgrp input{width:100%;min-width:0;font:13px var(--mono);padding:6px 7px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font-variant-numeric:tabular-nums}
+.fgrp input:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+.fgrp .reset{grid-column:1/-1;justify-self:end;font-size:12px}
 details.busgrp{display:flex;flex-direction:column;gap:6px}
 details.busgrp>summary{cursor:pointer;font-weight:600;padding:6px 2px;list-style-position:inside}
 details.busgrp .homes{margin-top:6px}
@@ -143,7 +152,8 @@ details.busgrp .homes{margin-top:6px}
 
     <section id="homeSec">
       <h2>Houses and land on list.am</h2>
-      <p class="t2"><strong>Houses:</strong> new developments, $50,000–$90,000. <strong>Land:</strong> plots of 300–400 m², $10,000–$50,000. Each link opens list.am's live listings map centred on that station, so it is always current.</p>
+      <p class="t2">Each link opens list.am's live listings map with these filters, centred on that station or stop, so it is always current. Leave a box empty for no limit.</p>
+      <div class="filters" id="filters"></div>
       <div class="homeopts">
         <label class="mode"><input type="checkbox" id="showCircles"> Walking circles</label>
         <select id="radius" aria-label="Walking radius">
@@ -173,7 +183,7 @@ const store = {
   get(k, d){ try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch(e){ return d; } },
   set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); return localStorage.getItem(k) === JSON.stringify(v); } catch(e){ return false; } }
 };
-const state = Object.assign({ trains: true, buses: true, ranks: [1,2,3,4,5], busIds: ['203','261','284','451'], circles: true, radius: 1500 }, store.get('ycm-state', {}));
+const state = Object.assign({ trains: true, buses: true, ranks: [1,2,3,4,5], busIds: ['203','261','284','451'], circles: true, radius: 1500, filters: { houses: {}, land: {} } }, store.get('ycm-state', {}));
 const save = () => store.set('ycm-state', state);
 
 /* ---------- panel ---------- */
@@ -197,17 +207,26 @@ DATA.buses.forEach(b => {
 });
 /* ---------- list.am links ---------- */
 const SEARCHES = {
-  houses: { label: 'Houses', desc: 'new developments, $50,000–$90,000',
-    base: 'https://www.list.am/category/1391?n=&sname=&s=&cmtype=&crc=1&price1=50000&price2=90000&_a4=&_a5=&_a37=&_a34=&_a136_1=&_a136_2=&_a81=&_a76=&_a35_1=&_a35_2=&_a98=&_a100_1=&_a100_2=&_a99=&gl=8&c=1391&center=40.1334706%2C44.2972458&zoom=10' },
-  land: { label: 'Land', desc: 'plots of 300–400 m², $10,000–$50,000',
+  houses: { label: 'Houses', areaLabel: 'House area', area: ['_a136_1', '_a136_2'],
+    base: 'https://www.list.am/category/1391?n=&sname=&s=&cmtype=&crc=1&price1=50000&price2=275000&_a4=&_a5=&_a37=&_a34=&_a136_1=150&_a136_2=250&_a81=&_a76=&_a35_1=&_a35_2=&_a98=&_a100_1=&_a100_2=&_a99=&gl=8&c=1391&center=40.217356%2C44.4685182&zoom=13' },
+  land: { label: 'Land', areaLabel: 'Plot area', area: ['_a14_1', '_a14_2'],
     base: 'https://www.list.am/category/1447?n=0&sname=&s=&cmtype=&crc=1&price1=10000&price2=50000&sq_price1=&sq_price2=&_a81=&_a14_1=300&_a14_2=400&gl=8&c=1447&center=40.10295%2C44.5044908&zoom=12' }
 };
 
 const ZOOM_FOR = { 1000: 15, 1500: 14, 2000: 14, 3000: 13 };
 const HOME_STATIONS = ['Noragavit', 'Masis', 'Masis-Koltso', 'Sis', 'Haykashen', 'Etchmiadzin stn', 'Mkhchyan'];
 function listamUrl(id, kind = 'houses'){ const s = DATA.stations[id]; return listamAt(s.lat, s.lon, kind); }
+const FILTER_DEFAULTS = { houses: { pmin: 50000, pmax: 275000, amin: 150, amax: 250 }, land: { pmin: 10000, pmax: 50000, amin: 300, amax: 400 } };
+const fval = (kind, f) => { const v = state.filters && state.filters[kind] ? state.filters[kind][f] : undefined; return v === undefined ? FILTER_DEFAULTS[kind][f] : v; };
+const money = n => '$' + Number(n).toLocaleString('en-US');
+function rangeText(lo, hi, fmt){ if (lo === '' && hi === '') return 'any'; if (lo === '') return 'up to ' + fmt(hi); if (hi === '') return fmt(lo) + ' and up'; return fmt(lo) + '–' + fmt(hi); }
+function descOf(kind){
+  return `${rangeText(fval(kind, 'amin'), fval(kind, 'amax'), n => n)} m², ${rangeText(fval(kind, 'pmin'), fval(kind, 'pmax'), money)}`.replace('any m²', 'any size').replace(/, any$/, ', any price');
+}
 function listamAt(lat, lon, kind = 'houses'){
-  const s = { lat, lon }, u = new URL(SEARCHES[kind].base);
+  const s = { lat, lon }, sr = SEARCHES[kind], u = new URL(sr.base);
+  u.searchParams.set('price1', fval(kind, 'pmin')); u.searchParams.set('price2', fval(kind, 'pmax'));
+  u.searchParams.set(sr.area[0], fval(kind, 'amin')); u.searchParams.set(sr.area[1], fval(kind, 'amax'));
   u.searchParams.set('center', s.lat.toFixed(6) + ',' + s.lon.toFixed(6));
   u.searchParams.set('zoom', String(ZOOM_FOR[state.radius] || 14));
   return u.toString();
@@ -233,6 +252,32 @@ function renderHomeList(){
       <span class="go">${Object.entries(SEARCHES).map(([k, v]) => `<a href="${esc(listamAt(w[1], w[2], k))}" target="_blank" rel="noopener" aria-label="${v.label} near ${esc(w[0])} on list.am">${v.label} ↗</a>`).join('')}</span>
       <span class="t2">Bus ${b.id} to ${esc(b.from)}</span></div>`).join('')}</div></details>`).join('');
 }
+function renderFilters(){
+  const box = document.getElementById('filters');
+  box.innerHTML = Object.entries(SEARCHES).map(([k, sr]) => `
+    <div class="fgrp" data-kind="${k}">
+      <div class="fh"><span>${sr.label}</span><span class="t2" id="desc-${k}">${esc(descOf(k))}</span></div>
+      <label for="${k}-pmin">Price, USD</label><input id="${k}-pmin" data-f="pmin" inputmode="numeric" value="${fval(k, 'pmin')}" aria-label="${sr.label} minimum price in US dollars">
+      <label class="to" for="${k}-pmax">to</label><input id="${k}-pmax" data-f="pmax" inputmode="numeric" value="${fval(k, 'pmax')}" aria-label="${sr.label} maximum price in US dollars">
+      <label for="${k}-amin">${sr.areaLabel}, m²</label><input id="${k}-amin" data-f="amin" inputmode="numeric" value="${fval(k, 'amin')}" aria-label="${sr.label} minimum area in square metres">
+      <label class="to" for="${k}-amax">to</label><input id="${k}-amax" data-f="amax" inputmode="numeric" value="${fval(k, 'amax')}" aria-label="${sr.label} maximum area in square metres">
+      <button class="link reset" type="button" data-reset="${k}">Reset to defaults</button>
+    </div>`).join('');
+}
+renderFilters();
+let filterTimer;
+document.getElementById('filters').addEventListener('input', e => {
+  const inp = e.target; if (!inp.dataset.f) return;
+  const k = inp.closest('.fgrp').dataset.kind, raw = inp.value.replace(/[^0-9]/g, '');
+  if (inp.value !== raw) inp.value = raw;
+  state.filters = state.filters || {}; state.filters[k] = Object.assign({}, state.filters[k], { [inp.dataset.f]: raw === '' ? '' : Number(raw) });
+  document.getElementById('desc-' + k).textContent = descOf(k);
+  clearTimeout(filterTimer); filterTimer = setTimeout(() => { renderHomeList(); changed(); }, 250);
+});
+document.getElementById('filters').addEventListener('click', e => {
+  const k = e.target.dataset && e.target.dataset.reset; if (!k) return;
+  state.filters[k] = {}; renderFilters(); renderHomeList(); changed();
+});
 renderHomeList();
 
 function syncPanel(){
@@ -408,14 +453,14 @@ function stationBalloon(id){
   <table><tr><th>Rank</th><th>Train</th><th>Direction</th><th>Departs</th><th>Arrives</th><th>Time</th></tr>
   ${rows.map(({ r, t }) => `<tr><td class="r">${dot(r.rank)}</td><td>${t.train}</td><td class="r">${t.dir === 'in' ? 'To Yerevan' : 'From Yerevan'}</td><td>${t.dep}</td><td>${t.arr}</td><td>${fmtMin(t.mins)}</td></tr>`).join('')}
   </table><p>All trains run daily, all year. <a href="${link}" target="_blank" rel="noopener">Directions in Yandex Maps</a></p>
-  ${HOME_STATIONS.includes(id) ? Object.entries(SEARCHES).map(([k, v]) => `<p><a href="${esc(listamUrl(id, k))}" target="_blank" rel="noopener"><b>${v.label} near this station on list.am</b></a> (${esc(v.desc)})</p>`).join('') : ''}</div>`;
+  ${HOME_STATIONS.includes(id) ? Object.entries(SEARCHES).map(([k, v]) => `<p><a href="${esc(listamUrl(id, k))}" target="_blank" rel="noopener"><b>${v.label} near this station on list.am</b></a> (${esc(descOf(k))})</p>`).join('') : ''}</div>`;
 }
 
 function stopBalloon(b, w){
   const name = w[0].replace(' (terminus area)', '');
   return `<div class="bl"><h3><span class="dot" style="background:${b.color};width:auto;padding:0 5px;border-radius:4px">${b.id}</span> ${esc(name)}</h3>
   <p class="n">On bus ${b.id} toward ${esc(b.from)}. Morning, to Yerevan: ${esc(b.in)}</p>
-  ${Object.entries(SEARCHES).map(([k, v]) => `<p><a href="${esc(listamAt(w[1], w[2], k))}" target="_blank" rel="noopener"><b>${v.label} near this stop on list.am</b></a> (${esc(v.desc)})</p>`).join('')}
+  ${Object.entries(SEARCHES).map(([k, v]) => `<p><a href="${esc(listamAt(w[1], w[2], k))}" target="_blank" rel="noopener"><b>${v.label} near this stop on list.am</b></a> (${esc(descOf(k))})</p>`).join('')}
   </div>`;
 }
 function busBalloon(b){
@@ -446,6 +491,7 @@ function render(){
     const on = state.buses && state.busIds.includes(b.id), o = busObjs[b.id];
     if (on && !o.route && !o.fallback && !o.pending) buildBus(b);
     setVisible(o.route, on); setVisible(o.fallback, on); setVisible(o.marks, on);
+    o.marks.each((pm, i) => { if (i > 0) pm.properties.set('balloonContent', stopBalloon(b, b.wp[i])); });
   });
   captions();
 }
